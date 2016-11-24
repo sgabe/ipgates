@@ -13,9 +13,10 @@ All events are logged to /var/log/ipgates.log for accountability.
 
 __description__ = 'Setup destination NAT and source NAT using iptables'
 __author__ = 'Gabor Seljan'
-__version__ = '0.3.1'
-__date__ = '2016/11/03'
+__version__ = '0.3.2'
+__date__ = '2016/11/24'
 
+import os
 import sys
 import iptc
 import ipaddr
@@ -89,9 +90,13 @@ if args.dnat and args.service:
     dhost = config[args.service]['dhost']
     dport = config[args.service]['dport']
 
+if os.environ.has_key('SUDO_USER'):
+  USERNAME = os.environ['SUDO_USER']
+else:
+  USERNAME = os.environ['USER']
+
 INSIDE = 'eth0'
 OUTSIDE = 'eth1'
-
 
 def is_valid_ip(ip):
     if ip:
@@ -119,11 +124,11 @@ def is_existing_rule(table, chain, target, in_interface=None, out_interface=None
                        (r.target.to_destination == ':'.join([dhost, dport])):
                         msg = 'Rule in {} / {} already exists'.format(t.name.upper(), c.name)
                         print('[+] {}'.format(msg))
-                        logging.info(msg)
+                        logging.info(msg, extra={'username': USERNAME})
                         msg = 'in: {} protocol: {} dst: {} dport: {} target: {} destination: {}'.format(
                             r.in_interface, r.protocol, r.dst, m.dport, r.target.name, r.target.to_destination)
                         print('\t{}'.format(msg).expandtabs(4))
-                        logging.info(msg)
+                        logging.info(msg, extra={'username': USERNAME})
                         return True
                 if (c.name == 'FORWARD') and (chain == 'FORWARD'):
                     if (r.protocol == protocol) and \
@@ -134,11 +139,11 @@ def is_existing_rule(table, chain, target, in_interface=None, out_interface=None
                        (r.target.name == target):
                         msg = 'Rule in {} / {} already exists'.format(t.name.upper(), c.name)
                         print('[+] {}'.format(msg))
-                        logging.info(msg)
+                        logging.info(msg, extra={'username': USERNAME})
                         msg = 'in: {} out: {} protocol: {} dst: {} dport: {} target: {}'.format(
                             r.in_interface, r.out_interface, r.protocol, r.dst, m.dport, r.target.name)
                         print('\t{}'.format(msg).expandtabs(4))
-                        logging.info(msg)
+                        logging.info(msg, extra={'username': USERNAME})
                         return True
             if (c.name == 'POSTROUTING') and (chain == 'POSTROUTING'):
                 if (r.in_interface == in_interface) and \
@@ -148,11 +153,11 @@ def is_existing_rule(table, chain, target, in_interface=None, out_interface=None
                    (r.target.to_source == args.external):
                     msg = 'Rule in {} / {} already exists'.format(t.name.upper(), c.name)
                     print('[+] {}'.format(msg))
-                    logging.info(msg)
+                    logging.info(msg, extra={'username': USERNAME})
                     msg = 'in: {} out: {} src: {} target: {} destination: {}'.format(
                         r.in_interface, r.out_interface, r.src, r.target.name, r.target.to_source)
                     print('\t{}'.format(msg).expandtabs(4))
-                    logging.info(msg)
+                    logging.info(msg, extra={'username': USERNAME})
                     return True
     return False
 
@@ -160,7 +165,7 @@ def is_existing_rule(table, chain, target, in_interface=None, out_interface=None
 def add_rule(table, chain, rule):
     msg = 'Adding rule to {} / {}'.format(table.name.upper(), chain.name)
     print('[+] {}'.format(msg))
-    logging.info(msg)
+    logging.info(msg, extra={'username': USERNAME})
     if chain.name == 'PREROUTING':
         # iptables -t nat -A PREROUTING -i eth1 -p tcp -d 123.123.123.123 --dport 22 -j DNAT --to-destination 192.168.123.123
         msg = 'in: {} protocol: {} dst: {} dport: {} target: {} destination: {}'.format(
@@ -174,7 +179,7 @@ def add_rule(table, chain, rule):
         msg = 'in: {} out: {} src: {} target: {} destination: {}'.format(
             rule.in_interface, rule.out_interface, rule.src, rule.target.name, rule.target.to_source)
     print('\t{}'.format(msg).expandtabs(4))
-    logging.info(msg)
+    logging.info(msg, extra={'username': USERNAME})
     try:
         if chain.name == 'POSTROUTING':
             chain.insert_rule(rule)
@@ -184,13 +189,13 @@ def add_rule(table, chain, rule):
         table.refresh()
     except iptc.IPTCError as e:
         print('[!] {}'.format(str(e).capitalize()))
-        logging.error(e)
+        logging.error(e, extra={'username': USERNAME})
 
 
 def delete_rule(table, chain, rule):
     msg = 'Deleting rule from {} / {}'.format(table.name.upper(), chain.name)
     print('[-] {}'.format(msg))
-    logging.info(msg)
+    logging.info(msg, extra={'username': USERNAME})
     if chain.name == 'PREROUTING':
         msg = 'in: {} protocol: {} dst: {} dport: {} target: {} destination: {}'.format(
             rule.in_interface, rule.protocol, rule.dst, rule.matches[0].dport, rule.target.name, rule.target.to_destination)
@@ -201,14 +206,14 @@ def delete_rule(table, chain, rule):
         msg = 'in: {} out: {} src: {} target: {} destination: {}'.format(
             rule.in_interface, rule.out_interface, rule.src, rule.target.name, rule.target.to_source)
     print('\t{}'.format(msg).expandtabs(4))
-    logging.info(msg)
+    logging.info(msg, extra={'username': USERNAME})
     try:
         chain.delete_rule(rule)
         table.commit()
         table.refresh()
     except iptc.IPTCError as e:
         print('[!] {}'.format(str(e).capitalize()))
-        logging.error(e)
+        logging.error(e, extra={'username': USERNAME})
 
 
 def is_existing_cronjob():
@@ -223,14 +228,14 @@ def add_cronjob():
         cmd = 'ipgates --dnat -s {} -d'.format(args.service)
         msg = 'Adding cron job to automatically remove rule for {} service'.format(args.service.upper())
         print('[+] {}'.format(msg))
-        logging.info(msg)
+        logging.info(msg, extra={'username': USERNAME})
         cron = CronTab(tabfile='/etc/crontab', user=False)
         for job in cron.find_comment(args.service):
             job.enable()
             cron.write()
             msg = 'Execute "{}" {}'.format(cmd, job.description(use_24hour_time_format=True).lower())
             print('\t{}'.format(msg).expandtabs(4))
-            logging.info(msg)
+            logging.info(msg, extra={'username': USERNAME})
             return
         job = cron.new(command=cmd, comment=args.service, user='root')
         job.setall('{} 18 * * *'.format(randint(0, 59)))
@@ -238,7 +243,7 @@ def add_cronjob():
         cron.write()
         msg = 'Execute "{}" {}'.format(cmd, job.description(use_24hour_time_format=True).lower())
         print('\t{}'.format(msg).expandtabs(4))
-        logging.info(msg)
+        logging.info(msg, extra={'username': USERNAME})
 
 
 def delete_cronjob():
@@ -248,7 +253,7 @@ def delete_cronjob():
         cron.write()
         msg = 'Deleting cron job for {} service'.format(args.service.upper())
         print('[-] {}'.format(msg))
-        logging.info(msg)
+        logging.info(msg, extra={'username': USERNAME})
         return
 
 
@@ -256,7 +261,7 @@ def main():
     logging.basicConfig(
         filename='/var/log/ipgates.log',
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(username)s - %(levelname)s - %(message)s'
     )
 
     if args.dnat and args.service:

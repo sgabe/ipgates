@@ -13,7 +13,7 @@ All events are logged to /var/log/ipgates.log for accountability.
 
 __description__ = 'Setup destination NAT and source NAT using iptables'
 __author__ = 'Gabor Seljan'
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 __date__ = '2016/11/24'
 
 import os
@@ -306,7 +306,6 @@ def main():
         table.autocommit = False
         chain = iptc.Chain(table, 'POSTROUTING')
         rule = iptc.Rule()
-        rule.in_interface = INSIDE
         rule.out_interface = OUTSIDE
         rule.src = args.internal
         target = rule.create_target('SNAT')
